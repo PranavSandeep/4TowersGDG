@@ -193,14 +193,8 @@
                         container.style.width = '220px';
 
                         if (m.url && m.url !== "None" && m.url !== "null") {
-                            // Fix path for display if needed, or assume relative/absolute
-                            // Since local file paths won't load in browser for security, 
-                            // this might fail if not served via web server.
-                            // But we'll try to use the stored URL.
-                            // NOTE: Local paths /Users/... won't work in <img src>
                             const imgDiv = document.createElement('div');
-                            // Attempt to handle local path if served via static route? 
-                            // For now we just put the src.
+                            // m.url comes from backend as "/images/filename.jpg"
                             imgDiv.innerHTML = `<img src="${m.url}" style="width:100%; border-radius:8px; margin-bottom:8px;" alt="Image">`;
                             container.appendChild(imgDiv);
                         }

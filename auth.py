@@ -1,6 +1,6 @@
 import firebase_admin
 from firebase_admin import credentials, auth
-from flask import Flask, request, redirect, render_template, session, jsonify
+from flask import Flask, request, redirect, render_template, session, jsonify, send_from_directory
 import mysql.connector as mc
 import os
 
@@ -99,6 +99,11 @@ def getData():
 
 
 
+@app.route("/images/<path:filename>")
+def serve_image(filename):
+    return send_from_directory("/Users/aman/Desktop/4towers/images/", filename)
+
+
 @app.route("/get_markers")
 def get_markers():
     try:
@@ -116,6 +121,11 @@ def get_markers():
         markers = []
         for row in rows:
             marker = dict(zip(column_names, row))
+            # Convert absolute file path to web URL
+            if marker.get('url') and "4towers/images/" in marker['url']:
+                filename = os.path.basename(marker['url'])
+                marker['url'] = f"/images/{filename}"
+            
             markers.append(marker)
             
         connection.close()
@@ -137,6 +147,16 @@ def delete_marker():
             database="4towers"
         )
         cursor = connection.cursor()
+
+        cursor.execute("SELECT url FROM markers WHERE id = %s", (marker_id,))
+        result = cursor.fetchone()
+        
+        if result and result[0]:
+            image_path = result[0]
+            if os.path.exists(image_path):
+                os.remove(image_path)
+                print(f"Deleted image file: {image_path}")
+
         cursor.execute("DELETE FROM markers WHERE id = %s", (marker_id,))
         connection.commit()
         connection.close()
