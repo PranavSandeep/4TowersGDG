@@ -98,6 +98,32 @@ def getData():
     })
 
 
+
+@app.route("/get_markers")
+def get_markers():
+    try:
+        connection = mc.connect(
+            host="localhost",
+            user="root",
+            password="",
+            database="4towers"
+        )
+        cursor = connection.cursor()
+        cursor.execute("SELECT * FROM markers")
+        rows = cursor.fetchall()
+        column_names = [i[0] for i in cursor.description]
+        
+        markers = []
+        for row in rows:
+            marker = dict(zip(column_names, row))
+            markers.append(marker)
+            
+        connection.close()
+        return jsonify(markers)
+    except Exception as e:
+        print("GET MARKERS ERROR:", e)
+        return jsonify([])
+
 @app.route("/delete", methods=["POST"])
 def delete_marker():
     try:

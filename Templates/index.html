@@ -39,6 +39,23 @@
         .relocate-btn:active {
             transform: translateY(0);
         }
+
+        .leaflet-tooltip {
+            background: #2e7df6;
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-family: 'Manrope', sans-serif;
+            font-weight: 600;
+            font-size: 13px;
+            padding: 8px 12px;
+            box-shadow: 0 4px 12px rgba(46, 125, 246, 0.4);
+        }
+
+        /* Remove the little triangle pointer if desired, or style it */
+        .leaflet-tooltip-top:before {
+            border-top-color: #2e7df6;
+        }
     </style>
 </head>
 
@@ -135,7 +152,12 @@
                 maxZoom: 19
             }).addTo(map);
 
-            // Add Search Control
+
+
+            // --- Load Markers ---
+            let allMarkersData = [];
+
+            // Add Default Search Control (Map Search Only)
             L.Control.geocoder({
                 defaultMarkGeocode: false
             })
@@ -150,6 +172,101 @@
                     map.fitBounds(poly.getBounds());
                 })
                 .addTo(map);
+
+            // Fetch and Display Markers on Load
+            async function loadMarkers() {
+                try {
+                    const res = await fetch("/get_markers");
+                    const markers = await res.json();
+                    allMarkersData = markers;
+
+                    markers.forEach(m => {
+                        // Re-use logic to create marker visual
+                        // Note: To make this robust, we should refactor createMarker logic
+                        // For now, I'll basically replicate visual creation (popup + zoom + hover)
+
+                        const latLng = [m.lat, m.lon];
+
+                        // Create Popup Content
+                        // (Simplified version of addMarker content creation)
+                        const container = document.createElement('div');
+                        container.style.width = '220px';
+
+                        if (m.url && m.url !== "None" && m.url !== "null") {
+                            // Fix path for display if needed, or assume relative/absolute
+                            // Since local file paths won't load in browser for security, 
+                            // this might fail if not served via web server.
+                            // But we'll try to use the stored URL.
+                            // NOTE: Local paths /Users/... won't work in <img src>
+                            const imgDiv = document.createElement('div');
+                            // Attempt to handle local path if served via static route? 
+                            // For now we just put the src.
+                            imgDiv.innerHTML = `<img src="${m.url}" style="width:100%; border-radius:8px; margin-bottom:8px;" alt="Image">`;
+                            container.appendChild(imgDiv);
+                        }
+
+                        const userDiv = document.createElement('div');
+                        userDiv.style.fontWeight = 'bold';
+                        userDiv.style.fontSize = '12px';
+                        userDiv.style.color = '#555';
+                        userDiv.style.marginBottom = '4px';
+                        userDiv.innerText = `User: ${m.user}`;
+                        container.appendChild(userDiv);
+
+                        const textDiv = document.createElement('div');
+                        textDiv.style.fontWeight = '600';
+                        textDiv.style.fontSize = '15px';
+                        textDiv.style.marginBottom = '12px';
+                        textDiv.innerText = m.text;
+                        container.appendChild(textDiv);
+
+                        // Delete Button (functionality ID required)
+                        const btnDiv = document.createElement('div');
+                        const delBtn = document.createElement('button');
+                        delBtn.innerText = 'Delete Marker';
+                        delBtn.style.padding = '8px 14px';
+                        delBtn.style.borderRadius = '8px';
+                        delBtn.style.border = 'none';
+                        delBtn.style.background = '#ff4d4f';
+                        delBtn.style.color = 'white';
+                        delBtn.style.fontWeight = '600';
+                        delBtn.style.cursor = 'pointer';
+                        delBtn.style.width = '100%';
+                        btnDiv.appendChild(delBtn);
+                        container.appendChild(btnDiv);
+
+                        const marker = L.marker(latLng).addTo(map).bindPopup(container);
+
+                        // Hover Preview
+                        marker.bindTooltip(m.text, {
+                            direction: 'top',
+                            offset: [0, -20],
+                            opacity: 0.9
+                        });
+
+                        // Zoom on click
+                        marker.on('click', () => {
+                            if (map.getZoom() < 16) {
+                                map.flyTo(marker.getLatLng(), 16, { duration: 1.5 });
+                            }
+                        });
+
+                        delBtn.onclick = () => {
+                            const formData = new FormData();
+                            formData.append("id", m.id);
+                            fetch("/delete", { method: "POST", body: formData });
+                            map.removeLayer(marker);
+                            // remove from local array
+                            allMarkersData = allMarkersData.filter(x => x.id !== m.id);
+                        };
+                    });
+
+                } catch (e) {
+                    console.error("Failed to load markers", e);
+                }
+            }
+
+            loadMarkers();
 
             // Custom Icon
             // const customIcon = L.divIcon({
@@ -254,8 +371,25 @@
                 // Use custom icon for marker
                 const marker = L.marker(clickedLatLng)
                     .addTo(map)
-                    .bindPopup(container)
-                    .openPopup();
+                    .bindPopup(container);
+
+                // Add hover tooltip
+                marker.bindTooltip(text, {
+                    direction: 'top',
+                    offset: [0, -20],
+                    opacity: 0.9
+                });
+
+                // Zoom to marker on click if zoomed out
+                marker.on('click', () => {
+                    if (map.getZoom() < 16) {
+                        map.flyTo(marker.getLatLng(), 16, {
+                            duration: 1.5 // Smoother, slower animation
+                        });
+                    }
+                });
+
+                marker.openPopup();
 
                 // Direct event listener attachment
                 delBtn.onclick = () => {
@@ -296,7 +430,26 @@
                 return await response.json();
             }
 
+            let lastPopupClose = 0;
+            map.on('popupclose', () => {
+                lastPopupClose = Date.now();
+            });
+
             map.on('click', (e) => {
+                const popup = document.getElementById('popup');
+
+                // If the custom editor is open, close it
+                if (popup.style.display === 'block') {
+                    hidePopup();
+                    return;
+                }
+
+                // If a Leaflet popup just closed (within 200ms), don't open editor
+                if (Date.now() - lastPopupClose < 200) {
+                    return;
+                }
+
+                // otherwise open editor
                 clickedLatLng = e.latlng;
                 showPopup();
             });
