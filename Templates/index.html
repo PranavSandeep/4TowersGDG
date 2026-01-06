@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>Click to add marker</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Leaflet Control Geocoder CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+
+    <style>
+        #map {
+            height: 100vh;
+        }
+
+        .relocate-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+            padding: 12px 20px;
+            background: #2e7df6;
+            color: white;
+            border: none;
+            border-radius: 50px;
+            font-family: Manrope, sans-serif;
+            font-weight: 600;
+            font-size: 16px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .relocate-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+        }
+
+        .relocate-btn:active {
+            transform: translateY(0);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="map"></div>
+
+    <div id="popup" style="
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #ffffff;
+    padding: 24px 28px;
+    border-radius: 14px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.25);
+    width: 320px;
+    text-align: center;
+    font-family: Manrope, sans-serif;
+    z-index: 9999;
+">
+        <h2 style="
+        margin-top: 0;
+        margin-bottom: 18px;
+        font-weight: 700;
+        font-size: 20px;
+        color: #222;
+    ">
+            Write your content
+        </h2>
+
+        <input type="text" id="user" value="{{ user }}" placeholder="Enter user..." style="
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid #ccc;
+        font-size: 14px;
+        margin-bottom: 16px;
+        box-sizing: border-box;
+    ">
+
+        <input type="text" id="message" placeholder="Enter text..." style="
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid #ccc;
+        font-size: 14px;
+        margin-bottom: 16px;
+        box-sizing: border-box;
+    ">
+
+        <input type="file" id="imageUpload" accept="image/*" style="margin-bottom:18px">
+
+        <div style="display: flex; gap: 10px; justify-content: center;">
+            <input type="button" onclick="addMarker()" value="Place marker" style="
+            padding: 10px 16px;
+            border-radius: 8px;
+            border: none;
+            background: #2e7df6;
+            color: white;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            flex: 1;
+        ">
+            <input type="button" onclick="hidePopup()" value="Cancel" style="
+            padding: 10px 16px;
+            border-radius: 8px;
+            border: none;
+            background: #e0e0e0;
+            color: #333;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            flex: 1;
+        ">
+        </div>
+    </div>
+
+    <button onclick="relocateUser()" class="relocate-btn">Relocate</button>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Leaflet Control Geocoder JS -->
+    <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+
+            const map = L.map('map').setView([20, 78], 5);
+
+            // CartoDB Voyager Tiles (Colorful & Clean)
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19
+            }).addTo(map);
+
+            // Add Search Control
+            L.Control.geocoder({
+                defaultMarkGeocode: false
+            })
+                .on('markgeocode', function (e) {
+                    const bbox = e.geocode.bbox;
+                    const poly = L.polygon([
+                        bbox.getSouthEast(),
+                        bbox.getNorthEast(),
+                        bbox.getNorthWest(),
+                        bbox.getSouthWest()
+                    ]);
+                    map.fitBounds(poly.getBounds());
+                })
+                .addTo(map);
+
+            // Custom Icon
+            // const customIcon = L.divIcon({
+            //     className: 'custom-marker-icon',
+            //     iconSize: [16, 16],
+            //     iconAnchor: [8, 8],
+            //     popupAnchor: [0, -10]
+            // });
+
+            map.locate({
+                setView: true,
+                maxZoom: 17,
+                enableHighAccuracy: true
+            });
+
+            map.on('locationerror', () => {
+                alert("No location permissions granted");
+            });
+
+            let clickedLatLng = null;
+
+            window.showPopup = function () {
+                document.getElementById('popup').style.display = 'block';
+            };
+
+            window.hidePopup = function () {
+                document.getElementById('popup').style.display = 'none';
+            };
+
+            window.relocateUser = function () {
+                map.locate({
+                    setView: true,
+                    maxZoom: 17,
+                    enableHighAccuracy: true
+                });
+            };
+
+            window.addMarker = async function () {
+                const user = document.getElementById("user").value;
+                const text = document.getElementById("message").value;
+
+                if (!user || !text || !clickedLatLng) return;
+
+                const fileInput = document.getElementById("imageUpload");
+                const file = fileInput.files[0];
+
+                let imageHTML = "";
+
+                if (file) {
+                    const imageURL = URL.createObjectURL(file);
+                    imageHTML = `<img src="${imageURL}" style="width:100%; border-radius:8px; margin-bottom:8px;">`;
+                }
+
+                // Get ID from backend
+                const backendData = await sendToBackend();
+                const markerId = backendData.id;
+
+                // Create container element
+                const container = document.createElement('div');
+                container.style.width = '220px';
+
+                // Add Image if exists
+                if (imageHTML) {
+                    const imgDiv = document.createElement('div');
+                    imgDiv.innerHTML = imageHTML;
+                    container.appendChild(imgDiv);
+                }
+
+                // User
+                const userDiv = document.createElement('div');
+                userDiv.style.fontWeight = 'bold';
+                userDiv.style.fontSize = '12px';
+                userDiv.style.color = '#555';
+                userDiv.style.marginBottom = '4px';
+                userDiv.innerText = `User: ${user}`;
+                container.appendChild(userDiv);
+
+                // Text
+                const textDiv = document.createElement('div');
+                textDiv.style.fontWeight = '600';
+                textDiv.style.fontSize = '15px';
+                textDiv.style.marginBottom = '12px';
+                textDiv.innerText = text;
+                container.appendChild(textDiv);
+
+                // Delete Button
+                const btnDiv = document.createElement('div');
+                const delBtn = document.createElement('button');
+                delBtn.innerText = 'Delete Marker';
+                delBtn.style.padding = '8px 14px';
+                delBtn.style.borderRadius = '8px';
+                delBtn.style.border = 'none';
+                delBtn.style.background = '#ff4d4f'; // Red for danger/delete
+                delBtn.style.color = 'white';
+                delBtn.style.fontWeight = '600';
+                delBtn.style.cursor = 'pointer';
+                delBtn.style.width = '100%';
+
+                btnDiv.appendChild(delBtn);
+                container.appendChild(btnDiv);
+
+                // Use custom icon for marker
+                const marker = L.marker(clickedLatLng)
+                    .addTo(map)
+                    .bindPopup(container)
+                    .openPopup();
+
+                // Direct event listener attachment
+                delBtn.onclick = () => {
+                    // Send delete request to backend
+                    const formData = new FormData();
+                    formData.append("id", markerId);
+
+                    fetch("/delete", {
+                        method: "POST",
+                        body: formData
+                    });
+
+                    // Remove from map
+                    map.removeLayer(marker);
+                };
+
+                document.getElementById("message").value = "";
+                document.getElementById("popup").style.display = "none";
+                fileInput.value = "";
+                clickedLatLng = null;
+            };
+
+            async function sendToBackend() {
+                const formData = new FormData();
+                formData.append("user", document.getElementById("user").value);
+                formData.append("text", document.getElementById("message").value);
+                formData.append("lat", clickedLatLng.lat);
+                formData.append("lng", clickedLatLng.lng);
+
+                const file = document.getElementById("imageUpload").files[0];
+                if (file) formData.append("image", file);
+
+                const response = await fetch("/data", {
+                    method: "POST",
+                    body: formData
+                });
+
+                return await response.json();
+            }
+
+            map.on('click', (e) => {
+                clickedLatLng = e.latlng;
+                showPopup();
+            });
+
+        });
+    </script>
+
+</body>
+
+</html>

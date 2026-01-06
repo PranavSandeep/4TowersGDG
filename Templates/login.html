@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <title>Login</title>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      width: 100vw;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      font-family: 'Manrope', sans-serif;
+      background-size: 400% 400%;
+      animation: gradientBG 15s ease infinite;
+    }
+
+    @keyframes gradientBG {
+      0% {
+        background-position: 0% 50%;
+      }
+
+      50% {
+        background-position: 100% 50%;
+      }
+
+      100% {
+        background-position: 0% 50%;
+      }
+    }
+
+    .login-card {
+      background: rgba(255, 255, 255, 0.95);
+      padding: 40px 48px;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+      width: 320px;
+      text-align: center;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.5);
+    }
+
+    h2 {
+      margin-top: 0;
+      margin-bottom: 28px;
+      font-weight: 800;
+      font-size: 26px;
+      color: #1a1a1a;
+      letter-spacing: -0.5px;
+    }
+
+    .btn {
+      padding: 14px 24px;
+      border-radius: 12px;
+      border: none;
+      font-weight: 600;
+      font-size: 16px;
+      cursor: pointer;
+      font-family: 'Manrope', sans-serif;
+      width: 100%;
+      transition: all 0.2s ease;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .login-btn {
+      background: #2e7df6;
+      color: white;
+      box-shadow: 0 4px 12px rgba(46, 125, 246, 0.25);
+    }
+
+    .login-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(46, 125, 246, 0.35);
+      background: #256bd4;
+    }
+
+    .login-btn:active {
+      transform: translateY(0);
+    }
+
+    .guest-btn {
+      background: #f0f4f8;
+      color: #4a5568;
+      border: 1px solid transparent;
+    }
+
+    .guest-btn:hover {
+      background: #e2e8f0;
+      color: #2d3748;
+      transform: translateY(-2px);
+    }
+
+    .guest-btn:active {
+      transform: translateY(0);
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="login-card">
+    <h2>Welcome</h2>
+    <button onclick="login()" class="btn login-btn">Sign in with Google</button>
+    <a href="/guest" style="text-decoration: none;">
+      <button class="btn guest-btn">Access as Guest</button>
+    </a>
+  </div>
+
+  <form id="tokenForm" method="POST" action="/verify" style="display: none;">
+    <input type="hidden" name="idToken" id="idToken">
+  </form>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyCTPGaua2YzqfGEr6XWHnckAjMbPgiteX4",
+      authDomain: "towers-gdg.firebaseapp.com",
+      projectId: "towers-gdg",
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+
+    function login() {
+      const provider = new firebase.auth.GoogleAuthProvider();
+
+      auth.signInWithPopup(provider).then(async (result) => {
+        const token = await result.user.getIdToken();
+
+        document.getElementById("idToken").value = token;
+        document.getElementById("tokenForm").submit();
+      });
+    }
+  </script>
+
+</body>
+
+</html>
