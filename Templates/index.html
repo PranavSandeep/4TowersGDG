@@ -56,12 +56,116 @@
         .leaflet-tooltip-top:before {
             border-top-color: #2e7df6;
         }
+
+        /* Marker List Panel */
+        #marker-list-panel {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            width: 300px;
+            max-height: 400px;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+            overflow-y: auto;
+            font-family: 'Manrope', sans-serif;
+            padding: 16px;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        #marker-list-panel h3 {
+            margin: 0 0 8px 0;
+            font-size: 18px;
+            font-weight: 700;
+            color: #333;
+            position: sticky;
+            top: 0;
+            background: rgba(255, 255, 255, 0.9);
+            padding-bottom: 8px;
+            border-bottom: 1px solid #eee;
+            z-index: 1;
+        }
+
+        .marker-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            border: 1px solid transparent;
+        }
+
+        .marker-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border-color: #2e7df6;
+        }
+
+        .marker-item img {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            object-fit: cover;
+        }
+
+        .marker-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            overflow: hidden;
+        }
+
+        .marker-user {
+            font-size: 12px;
+            font-weight: 600;
+            color: #888;
+        }
+
+        .marker-text {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Scrollbar Styling */
+        #marker-list-panel::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        #marker-list-panel::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        #marker-list-panel::-webkit-scrollbar-thumb {
+            background-color: rgba(0, 0, 0, 0.2);
+            border-radius: 20px;
+        }
     </style>
 </head>
 
 <body>
 
     <div id="map"></div>
+
+    <!-- Visible Markers List Panel -->
+    <div id="marker-list-panel">
+        <h3>Nearby Markers</h3>
+        <div id="marker-list-content">
+            <!-- Items will be injected here -->
+        </div>
+    </div>
 
     <div id="popup" style="
     display: none;
@@ -178,6 +282,7 @@
                 try {
                     const res = await fetch("/get_markers");
                     const markers = await res.json();
+                    // Reset array to ensure clean state
                     allMarkersData = markers;
 
                     markers.forEach(m => {
@@ -231,6 +336,9 @@
 
                         const marker = L.marker(latLng).addTo(map).bindPopup(container);
 
+                        // Store marker instance in data object for later use (e.g. flyTo)
+                        m.markerInstance = marker;
+
                         // Hover Preview
                         marker.bindTooltip(m.text, {
                             direction: 'top',
@@ -252,13 +360,84 @@
                             map.removeLayer(marker);
                             // remove from local array
                             allMarkersData = allMarkersData.filter(x => x.id !== m.id);
+                            updateVisibleMarkers();
                         };
                     });
+
+                    updateVisibleMarkers();
 
                 } catch (e) {
                     console.error("Failed to load markers", e);
                 }
             }
+
+            function updateVisibleMarkers() {
+                const listContent = document.getElementById('marker-list-content');
+                listContent.innerHTML = '';
+
+                const bounds = map.getBounds();
+
+                // Filter markers that are within the current map bounds
+                const visibleMarkers = allMarkersData.filter(m => {
+                    if (!m.markerInstance) return false;
+                    return bounds.contains(m.markerInstance.getLatLng());
+                });
+
+                if (visibleMarkers.length === 0) {
+                    listContent.innerHTML = '<div style="color:#666; padding:10px; text-align:center;">No markers in view</div>';
+                    return;
+                }
+
+                visibleMarkers.forEach(m => {
+                    const item = document.createElement('div');
+                    item.className = 'marker-item';
+
+                    // Image thumbnail
+                    if (m.url && m.url !== "None" && m.url !== "null") {
+                        const img = document.createElement('img');
+                        img.src = m.url;
+                        item.appendChild(img);
+                    } else {
+                        // Placeholder icon or initial?
+                        const placeholder = document.createElement('div');
+                        placeholder.style.width = '40px';
+                        placeholder.style.height = '40px';
+                        placeholder.style.borderRadius = '8px';
+                        placeholder.style.background = '#eee';
+                        placeholder.style.display = 'flex';
+                        placeholder.style.alignItems = 'center';
+                        placeholder.style.justifyContent = 'center';
+                        placeholder.style.color = '#888';
+                        placeholder.innerHTML = '📍';
+                        item.appendChild(placeholder);
+                    }
+
+                    const info = document.createElement('div');
+                    info.className = 'marker-info';
+
+                    const user = document.createElement('div');
+                    user.className = 'marker-user';
+                    user.innerText = m.user;
+                    info.appendChild(user);
+
+                    const text = document.createElement('div');
+                    text.className = 'marker-text';
+                    text.innerText = m.text;
+                    info.appendChild(text);
+
+                    item.appendChild(info);
+
+                    // Fly to marker on click
+                    item.onclick = () => {
+                        map.flyTo(m.markerInstance.getLatLng(), 18, { duration: 1.5 });
+                        m.markerInstance.openPopup();
+                    };
+
+                    listContent.appendChild(item);
+                });
+            }
+
+            map.on('moveend', updateVisibleMarkers);
 
             loadMarkers();
 
@@ -367,6 +546,18 @@
                     .addTo(map)
                     .bindPopup(container);
 
+                // Add to local data for the list panel
+                allMarkersData.push({
+                    id: markerId,
+                    user: user,
+                    text: text,
+                    lat: clickedLatLng.lat,
+                    lon: clickedLatLng.lng,
+                    url: imageHTML ? (file ? URL.createObjectURL(file) : null) : null,
+                    markerInstance: marker
+                });
+                updateVisibleMarkers();
+
                 // Add hover tooltip
                 marker.bindTooltip(text, {
                     direction: 'top',
@@ -398,6 +589,10 @@
 
                     // Remove from map
                     map.removeLayer(marker);
+
+                    // Remove from local array and update list
+                    allMarkersData = allMarkersData.filter(x => x.id !== markerId);
+                    updateVisibleMarkers();
                 };
 
                 document.getElementById("message").value = "";
